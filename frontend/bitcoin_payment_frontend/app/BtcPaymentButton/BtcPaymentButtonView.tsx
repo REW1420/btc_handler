@@ -1,12 +1,12 @@
 import React from "react";
 import { Link, redirect, useNavigate } from "react-router";
-import { Button } from "~/components/ui/button";
-
+import { useOrder } from "src/context/invoiceContext";
 import axiosInstance from "src/api/axios";
+
 export function BitcoinPaymentButton() {
   const [isHovered, setIsHovered] = React.useState(false);
   const navigate = useNavigate();
-
+  const { setOrder, setInvoice } = useOrder();
   const handler_create_order = async () => {
     const response = await axiosInstance.post("/orders", {
       customer_id: 1,
@@ -18,8 +18,8 @@ export function BitcoinPaymentButton() {
 
     if (response.status === 201) {
       await handler_create_payment_attempt(
-        response.data.order.order_id,
-        response.data.paymentRequest.payment_request_id
+        response.data.created_order.order_id,
+        response.data.created_payment_request.payment_request_id
       );
     }
   };
@@ -37,11 +37,9 @@ export function BitcoinPaymentButton() {
       local_currency_id: 1,
     });
     if (response.status === 201) {
-      navigate("/btc/payment", {
-        state: {
-          data: response.data,
-        },
-      });
+      setInvoice(response.data);
+
+      navigate("/btc/payment");
     }
   };
   return (

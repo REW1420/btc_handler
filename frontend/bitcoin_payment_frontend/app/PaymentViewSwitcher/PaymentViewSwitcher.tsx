@@ -1,6 +1,6 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
+import { useOrder } from "src/context/invoiceContext";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { LightningPaymentView } from "../LightningPayment/LightningPaymentView";
 import { OnChainPaymentView } from "../OnChainPayment/OnChainPayment";
@@ -8,8 +8,6 @@ import { CircleArrowLeft } from "lucide-react";
 import { useLocation } from "react-router";
 export default function PaymentViewSwitcher() {
   const [paymentView, setPaymentView] = useState("onchain");
-  const location = useLocation();
-  const { data } = location.state || {};
 
   return (
     <div className="bg-gray-900 rounded-xl pt-6">
@@ -52,6 +50,7 @@ export default function PaymentViewSwitcher() {
 
             <div className="mt-6 relative min-h-64">
               <AnimatePresence mode="wait">
+                *{" "}
                 {paymentView === "onchain" && (
                   <motion.div
                     key="onchain"
@@ -60,10 +59,9 @@ export default function PaymentViewSwitcher() {
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <OnChainPaymentView onchainData={data} />
+                    <OnChainPaymentView />
                   </motion.div>
                 )}
-
                 {paymentView === "lightning" && (
                   <motion.div
                     key="lightning"

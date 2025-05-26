@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router";
 import CopyButton from "~/components/buttons/CopyButton";
+import { useOrder } from "src/context/invoiceContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,20 +13,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import axiosInstance from "src/api/axios";
 
-export function OnChainPaymentView(onchainData: any) {
+export function OnChainPaymentView() {
+  const { reset, order, invoice, setInvoice } = useOrder();
+
   const [timer, setTimer] = useState(
-    onchainData.onchainData.paymentPreference.invoice_life_time
+    invoice!.paymentPreference.invoice_life_time - 291
   );
   const [open, setIsOpen] = useState(false);
-  const [attempt, setAttempt] = useState(
-    onchainData.onchainData.paymentPreference.invoice_max_attemp
+  const [maxAttempt, setMaxAttempt] = useState(
+    invoice?.paymentPreference.invoice_max_attempt
   );
 
   // Simulate a countdown timer
   React.useEffect(() => {
+    console.log("render");
     const interval = setInterval(() => {
-      setTimer((prev: number) => {
+      setTimer((prev: any) => {
         if (prev <= 0) {
           clearInterval(interval);
           return 0;
@@ -38,7 +43,7 @@ export function OnChainPaymentView(onchainData: any) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [open]);
+  }, [timer]);
 
   function satsToBtc(sats: number): string {
     return (sats / 100000).toFixed(8);
@@ -49,19 +54,21 @@ export function OnChainPaymentView(onchainData: any) {
   };
   const onchain = {
     network: "Bitcoin OnChain",
-    usd: "$" + onchainData.onchainData.amount_info.amount_fiat,
-    btc: satsToBtc(onchainData.onchainData.paymentAttempt.amount_sats) + " BTC",
-    fee: satsToBtc(onchainData.onchainData.paymentAttempt.network_fee) + " BTC",
+    currency:
+      invoice?.amount_info.Currency.symbol + invoice?.amount_info.amount_fiat!,
+    btc: satsToBtc(invoice?.paymentAttempt.amount_sats!!) + " BTC",
+    fee: satsToBtc(invoice!!.paymentAttempt.network_fee) + " BTC",
     total:
       handle_get_total(
-        onchainData.onchainData.paymentAttempt.amount_sats,
-        onchainData.onchainData.paymentAttempt.network_fee
+        invoice!!.paymentAttempt.amount_sats,
+        invoice!!.paymentAttempt.network_fee
       ) + " BTC",
     note: "Puede tardar 10 a 60 min en ser confirmado",
     timer: "Expira en " + timer + " segundos",
-    attempt: attempt + "/3",
-    address: onchainData.onchainData.wallet_address,
-    sats: onchainData.onchainData.paymentAttempt.amount_sats + " Sats",
+    attempt: 0 + "/" + maxAttempt,
+    address: invoice!.wallet_address,
+    currency_code: invoice!.amount_info.Currency.code,
+    sats: invoice!.paymentAttempt.amount_sats + " Sats",
   };
 
   return (
@@ -103,12 +110,16 @@ export function OnChainPaymentView(onchainData: any) {
               Detalles de la transacción
             </h3>
             <div className="flex justify-between">
+              <span>ID</span>
+              <span>{invoice?.paymentAttempt.payment_attempt_id}</span>
+            </div>
+            <div className="flex justify-between">
               <span>Red</span>
               <span>{onchain.network}</span>
             </div>
             <div className="flex justify-between">
-              <span>Total en USD</span>
-              <span>{onchain.usd}</span>
+              <span>Total en {onchain.currency_code}</span>
+              <span>{onchain.currency}</span>
             </div>
             <div className="flex justify-between">
               <span>Total en Bitcoin</span>
@@ -157,8 +168,26 @@ export function OnChainPaymentView(onchainData: any) {
               </Link>
               <AlertDialogAction
                 onClick={() => {
-                  setIsOpen(false);
-                  setTimer(300);
+                  axiosInstance
+                    .post("/payment-attempts", {
+                      order_id: invoice!.paymentAttempt.order_id,
+                      payment_method_id: 1,
+                      amount_sats: invoice!.paymentAttempt.amount_sats,
+                      network_fee: invoice!.paymentAttempt.network_fee,
+                      local_currency_id: 1,
+                    })
+                    .then((response) => {
+                      if (response.status === 201) {
+                        setInvoice(response.data);
+                        setTimer(
+                          response.data.paymentPreference.invoice_life_time -
+                            290
+                        );
+                      }
+                    })
+                    .then(() => {
+                      setIsOpen(false);
+                    });
                 }}
               >
                 Generar nueva invoice
