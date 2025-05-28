@@ -185,31 +185,45 @@ export const get_payment_attempt_by_id = async (
     const paymentAttempt = await tx.payment_attempt.findUnique({
       where: { payment_attempt_id },
       select: {
-        order_id: true,
         payment_attempt_id: true,
+        payment_status_id: true,
+        payment_method_id: true,
+        order_id: true,
         network_fee: true,
         layer_1_address: true,
         invoice_address: true,
         amount_sats: true,
         metadata: true,
-
-        Customer_wallet_address: {
-          select: {
-            address: true,
-          },
-        },
-        Payment_method: {
-          select: {
-            name: true,
-          },
-        },
+        blocks_confirmed: true,
+        customer_wallet_address_id: true,
+        payment_preference_id: true,
+        created_at: true,
+        updated_at: true,
+        confirmed_at: true,
       },
     });
 
-    const payment_request = await tx.payment_request.findFirst({
-      where: { order_id: paymentAttempt?.order_id! },
+    if (!paymentAttempt) return null;
+
+    const paymentPreference = await tx.payment_preference.findUnique({
+      where: { payment_preference_id: paymentAttempt.payment_preference_id! },
       select: {
-        payment_request_id: true,
+        invoice_life_time: true,
+        invoice_max_attempt: true,
+      },
+    });
+
+    const customerWalletAddress = await tx.customer_wallet_address.findUnique({
+      where: {
+        customer_wallet_address_id: paymentAttempt.customer_wallet_address_id!,
+      },
+      select: {
+        address: true,
+      },
+    });
+    const payment_request = await tx.payment_request.findFirst({
+      where: { order_id: paymentAttempt.order_id! },
+      select: {
         amount_fiat: true,
         Currency: {
           select: {
@@ -222,6 +236,11 @@ export const get_payment_attempt_by_id = async (
       },
     });
 
-    return { paymentAttempt, ...payment_request };
+    return {
+      paymentAttempt,
+      paymentPreference: paymentPreference,
+      wallet_address: customerWalletAddress?.address,
+      amount_info: payment_request,
+    };
   });
 };

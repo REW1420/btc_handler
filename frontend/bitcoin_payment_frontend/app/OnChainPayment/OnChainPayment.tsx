@@ -1,8 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router";
 import CopyButton from "~/components/buttons/CopyButton";
 import { useOrder } from "src/context/invoiceContext";
+import { useNavigate } from "react-router";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,36 +15,41 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import axiosInstance from "src/api/axios";
+import BitcoinSummary from "~/BitcoinSummaryCard/BitcoinSummary";
+import TimeoutDialog from "~/TimeoutDialog/TimeoutDialog";
 
 export function OnChainPaymentView() {
-  const { reset, order, invoice, setInvoice } = useOrder();
+  const [btcPrice, setBtcPrice] = useState([]);
 
-  const [timer, setTimer] = useState(
-    invoice!.paymentPreference.invoice_life_time - 291
-  );
-  const [open, setIsOpen] = useState(false);
-  const [maxAttempt, setMaxAttempt] = useState(
-    invoice?.paymentPreference.invoice_max_attempt
-  );
+  const { reset, order, invoice, setInvoice } = useOrder();
+  const navigate = useNavigate();
+
+  const [timer, setTimer] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [maxAttempt, setMaxAttempt] = useState(0);
 
   // Simulate a countdown timer
-  React.useEffect(() => {
-    console.log("render");
+  const test = () => {
     const interval = setInterval(() => {
       setTimer((prev: any) => {
         if (prev <= 0) {
           clearInterval(interval);
           return 0;
         }
-        if (prev === 1) {
-          setIsOpen(true);
+        if (prev === "as") {
+          handle_update_status(
+            invoice!.paymentAttempt.payment_attempt_id,
+            4 // Assuming 3 is the ID for "expired" status
+          ).then(() => {
+            setOpen(true);
+          });
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timer]);
+  };
 
   function satsToBtc(sats: number): string {
     return (sats / 100000).toFixed(8);
@@ -52,7 +58,9 @@ export function OnChainPaymentView() {
     const total = sats + fee;
     return total;
   };
-  const onchain = {
+  {
+    /**
+    const onchain2 = {
     network: "Bitcoin OnChain",
     currency:
       invoice?.amount_info.Currency.symbol + invoice?.amount_info.amount_fiat!,
@@ -69,6 +77,31 @@ export function OnChainPaymentView() {
     address: invoice!.wallet_address,
     currency_code: invoice!.amount_info.Currency.code,
     sats: invoice!.paymentAttempt.amount_sats + " Sats",
+  }; */
+  }
+
+  const onchain = {
+    network: "Bitcoin OnChain",
+    currency: "",
+    btc: " BTC",
+    fee: " BTC",
+    total: " BTC",
+    note: "Puede tardar 10 a 60 min en ser confirmado",
+    timer: "Expira en " + timer + " segundos",
+    attempt: 0 + "/" + maxAttempt,
+    address: "",
+    currency_code: "",
+    sats: " Sats",
+  };
+
+  const handle_update_status = async (
+    payment_attempt_id: number,
+    payment_status_id: number
+  ) => {
+    await axiosInstance.put(`/payment-attempts/`, {
+      payment_attempt_id,
+      payment_status_id,
+    });
   };
 
   return (
@@ -111,7 +144,7 @@ export function OnChainPaymentView() {
             </h3>
             <div className="flex justify-between">
               <span>ID</span>
-              <span>{invoice?.paymentAttempt.payment_attempt_id}</span>
+              <span>{"invoice?.paymentAttempt.payment_attempt_id"}</span>
             </div>
             <div className="flex justify-between">
               <span>Red</span>
@@ -142,64 +175,60 @@ export function OnChainPaymentView() {
             <p className="text-center text-xs text-gray-600 mt-2 whitespace-pre-line">
               {onchain.note}
             </p>
+            <BitcoinSummary />
           </div>
         </div>
-        <AlertDialog open={open}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Tiempo de espera agotado!</AlertDialogTitle>
-              <AlertDialogDescription>
-                Puedes generar un nuevo código QR o dirección de pago.
-                <br />
-                <span className="text-red-500 font-semibold">
-                  Recuerda que el tiempo de espera es de 300 segundos.
-                </span>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <Link to={"/"}>
-                <AlertDialogCancel
-                  onClick={() => {
-                    setIsOpen(false);
-                  }}
-                >
-                  Cancel transacción
-                </AlertDialogCancel>
-              </Link>
-              <AlertDialogAction
-                onClick={() => {
-                  axiosInstance
-                    .post("/payment-attempts", {
-                      order_id: invoice!.paymentAttempt.order_id,
-                      payment_method_id: 1,
-                      amount_sats: invoice!.paymentAttempt.amount_sats,
-                      network_fee: invoice!.paymentAttempt.network_fee,
-                      local_currency_id: 1,
-                    })
-                    .then((response) => {
-                      if (response.status === 201) {
-                        setInvoice(response.data);
-                        setTimer(
-                          response.data.paymentPreference.invoice_life_time -
-                            290
-                        );
-                      }
-                    })
-                    .then(() => {
-                      setIsOpen(false);
-                    });
-                }}
-              >
-                Generar nueva invoice
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        <Link to="/btc/waiting_payment">
-          <Button variant="outline" size="sm" color="green" className="mt-4">
-            Empezar verificacion de pago
-          </Button>
-        </Link>
+        <TimeoutDialog
+          open={open}
+          onCancel={() => setOpen(false)}
+          onRetry={() => {
+            axiosInstance
+              .post("/payment-attempts", {
+                order_id: invoice!.paymentAttempt.order_id,
+                payment_method_id: 1,
+                amount_sats: invoice!.paymentAttempt.amount_sats,
+                network_fee: invoice!.paymentAttempt.network_fee,
+                local_currency_id: 1,
+              })
+              .then((response) => {
+                if (response.status === 201) {
+                  setInvoice(response.data);
+                  setTimer(
+                    response.data.paymentPreference.invoice_life_time - 290
+                  );
+                }
+              })
+              .then(() => {
+                setOpen(false);
+              });
+          }}
+        />
+
+        <Button
+          variant="outline"
+          size="sm"
+          color="green"
+          className="mt-4"
+          onClick={async () => {
+            await handle_update_status(
+              invoice!.paymentAttempt.payment_attempt_id,
+              2 // Assuming 2 is the ID for "in progress" status
+            );
+
+            axiosInstance
+              .get(
+                `/payment-attempts/${
+                  invoice!.paymentAttempt.payment_attempt_id
+                }`
+              )
+              .then((res) => {
+                setInvoice(res.data);
+                navigate("/btc/waiting_payment");
+              });
+          }}
+        >
+          Empezar verificación de pago
+        </Button>
       </div>
     </div>
   );
