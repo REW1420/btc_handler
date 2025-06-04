@@ -1,13 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useOrder } from "src/context/invoiceContext";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { LightningPaymentView } from "../LightningPayment/LightningPaymentView";
 import { OnChainPaymentView } from "../OnChainPayment/OnChainPayment";
 import { CircleArrowLeft } from "lucide-react";
-import { useLocation } from "react-router";
+import { useCountdown } from "src/hook/useCountdown";
+import { useOrder } from "src/context/InvoiceContext";
+
 export default function PaymentViewSwitcher() {
-  const [paymentView, setPaymentView] = useState("onchain");
+  const [paymentView, setPaymentView] = useState<"onchain" | "lightning">(
+    "onchain"
+  );
+  const { invoice } = useOrder();
 
   return (
     <div className="bg-gray-900 rounded-xl pt-6">
@@ -19,13 +23,13 @@ export default function PaymentViewSwitcher() {
       </div>
 
       <div className="min-h-screen text-white flex items-center justify-center">
-        <div className=" text-black bg-gray-100 rounded-2xl max-w-5xl w-full shadow-lg">
-          {/* view switcher */}
+        <div className="text-black bg-gray-100 rounded-2xl max-w-5xl w-full shadow-lg">
+          {/* View switcher */}
           <div className="flex flex-col items-center p-2">
             <ToggleGroup
               type="single"
               value={paymentView}
-              onValueChange={(value) => {
+              onValueChange={(value: "onchain" | "lightning") => {
                 if (value) setPaymentView(value);
               }}
               className="inline-flex bg-white p-1 rounded-lg shadow-sm"
@@ -46,11 +50,8 @@ export default function PaymentViewSwitcher() {
           </div>
 
           <div className="bg-gray-100 rounded-xl p-6">
-            {/* ToggleGroup con transiciones  */}
-
             <div className="mt-6 relative min-h-64">
               <AnimatePresence mode="wait">
-                *{" "}
                 {paymentView === "onchain" && (
                   <motion.div
                     key="onchain"

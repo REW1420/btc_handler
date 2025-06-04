@@ -8,10 +8,10 @@ import React, {
 
 interface PaymentAttemptResponse {
   paymentAttempt: {
-    payment_attempt_id: number;
-    payment_status_id: number;
-    payment_method_id: number;
-    order_id: number;
+    payment_attempt_code: string;
+    payment_status_code: string;
+    payment_method_code: string;
+    order_code: string;
     network_fee: number;
     layer_1_address: string | null;
     invoice_address: string | null;
@@ -31,9 +31,9 @@ interface PaymentAttemptResponse {
   wallet_address: string;
   amount_info: {
     amount_fiat: string;
-    Currency: {
+    Currencies: {
       name: string;
-      code: string;
+      currency_code: string;
       symbol: string;
       country: string;
     };
@@ -41,22 +41,30 @@ interface PaymentAttemptResponse {
 }
 
 interface Order {
-  order_id: number;
+  order_code: string;
+}
+interface BitcoinPrice {
+  price_usd: string;
 }
 
-interface OrderContextType {
+interface ContextType {
   order: Order | null;
   invoice: PaymentAttemptResponse | null;
+  bitcoinPrice: BitcoinPrice | null;
   setOrder: (order: Order) => void;
   setInvoice: (invoice: PaymentAttemptResponse) => void;
+  setBitcoinPrice?: (bitcoinPrice: BitcoinPrice) => void;
   reset: () => void;
 }
 
-const OrderContext = createContext<OrderContextType | undefined>(undefined);
+const OrderContext = createContext<ContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [order, setOrderState] = useState<Order | null>(null);
   const [invoice, setInvoiceState] = useState<PaymentAttemptResponse | null>(
+    null
+  );
+  const [bitcoinPrice, setBitcoinPriceState] = useState<BitcoinPrice | null>(
     null
   );
 
@@ -80,6 +88,10 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     setInvoiceState(invoice);
   };
 
+  const setBitcoinPrice = (price: BitcoinPrice) => {
+    setBitcoinPriceState(price);
+  };
+
   const reset = () => {
     localStorage.removeItem("order");
     localStorage.removeItem("invoice");
@@ -89,7 +101,15 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <OrderContext.Provider
-      value={{ order, invoice, setOrder, setInvoice, reset }}
+      value={{
+        order,
+        invoice,
+        setOrder,
+        setInvoice,
+        reset,
+        bitcoinPrice,
+        setBitcoinPrice,
+      }}
     >
       {children}
     </OrderContext.Provider>
@@ -103,3 +123,33 @@ export const useOrder = () => {
   }
   return context;
 };
+export function getAllCountdownStatuses(duration_default = 3): {
+  key: string;
+  is_active: boolean;
+  remaining: number;
+}[] {
+  const keys: string[] = JSON.parse(
+    localStorage.getItem("countdownKeys") || "[]"
+  );
+  const now = Date.now();
+
+  return keys
+    .map((key) => {
+      const stored = localStorage.getItem(key);
+      if (!stored) return { key, is_active: false, remaining: 0 };
+
+      const start_time = parseInt(stored);
+      const elapsed = Math.floor((now - start_time) / 1000);
+      const remaining = duration_default - elapsed;
+
+      if (remaining <= 0) {
+        localStorage.removeItem(key);
+        const updated = keys.filter((k) => k !== key);
+        localStorage.setItem("countdownKeys", JSON.stringify(updated));
+        return { key, is_active: false, remaining: 0 };
+      }
+
+      return { key, is_active: true, remaining };
+    })
+    .filter(({ is_active }) => is_active);
+}

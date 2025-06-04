@@ -1,73 +1,71 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+
+// Define el tipo de retorno del hook
+interface CountdownReturn {
+  remaining: number;
+  start: () => void;
+  reset: () => void;
+  isActive: boolean;
+}
 
 export function useCountdown({
-  key = "countdownStart",
-  duration = 300,
+  duration = 3,
   onExpire,
+  onStart,
 }: {
-  key?: string;
   duration?: number;
   onExpire?: () => void;
-}) {
+  onStart?: () => void;
+}): CountdownReturn {
+  // <-- Añade el tipo de retorno aquí
   const [remaining, setRemaining] = useState<number>(duration);
+  const [isActive, setIsActive] = useState<boolean>(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(key);
-    let startTime = stored ? parseInt(stored) : Date.now();
-
-    if (!stored) {
-      localStorage.setItem(key, startTime.toString());
+  const clear = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-
-    const update = () => {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000);
-      const newRemaining = duration - elapsed;
-
-      if (newRemaining <= 0) {
-        clear();
-        setRemaining(0);
-        localStorage.removeItem(key);
-        if (onExpire) onExpire();
-        return;
-      }
-
-      setRemaining(newRemaining);
-    };
-
-    intervalRef.current = setInterval(update, 1000);
-    update();
-
-    return clear;
+    setIsActive(false);
+    startTimeRef.current = null;
   }, []);
 
-  const clear = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-  };
+  const updateCountdown = useCallback(() => {
+    if (!startTimeRef.current) return;
 
-  const reset = () => {
-    const newStart = Date.now();
-    localStorage.setItem(key, newStart.toString());
+    const now = Date.now();
+    const elapsed = Math.floor((now - startTimeRef.current) / 1000);
+    const newRemaining = duration - elapsed;
+
+    if (newRemaining <= 0) {
+      clear();
+      setRemaining(0);
+      onExpire?.();
+      return;
+    }
+
+    setRemaining(newRemaining);
+  }, [duration, onExpire, clear]);
+
+  const start = useCallback(() => {
+    clear();
+    startTimeRef.current = Date.now();
     setRemaining(duration);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const elapsed = Math.floor((now - newStart) / 1000);
-      const newRemaining = duration - elapsed;
+    setIsActive(true);
 
-      if (newRemaining <= 0) {
-        clearInterval(interval);
-        setRemaining(0);
-        localStorage.removeItem(key);
-        if (onExpire) onExpire();
-        return;
-      }
+    intervalRef.current = setInterval(updateCountdown, 1000);
+    onStart?.();
+  }, [duration, updateCountdown, onStart, clear]);
 
-      setRemaining(newRemaining);
-    }, 1000);
-    intervalRef.current = interval;
-  };
+  const reset = useCallback(() => {
+    start();
+  }, [start]);
 
-  return { remaining, reset };
+  useEffect(() => {
+    return () => clear();
+  }, [clear]);
+
+  return { remaining, start, reset, isActive };
 }
