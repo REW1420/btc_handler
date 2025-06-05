@@ -42,6 +42,7 @@ interface PaymentAttemptResponse {
 
 interface Order {
   order_code: string;
+<<<<<<< HEAD
   payment_request_code: string;
 }
 
@@ -66,18 +67,42 @@ interface ContextType extends PaymentState {
   setOrder: (order: Order) => void;
   setActiveMethod: (method: PaymentMethod) => void;
   setBitcoinPrice: (price: BitcoinPrice) => void;
+=======
+}
+interface BitcoinPrice {
+  price_usd: string;
+}
+
+interface ContextType {
+  order: Order | null;
+  invoice: PaymentAttemptResponse | null;
+  bitcoinPrice: BitcoinPrice | null;
+  setOrder: (order: Order) => void;
+  setInvoice: (invoice: PaymentAttemptResponse) => void;
+  setBitcoinPrice?: (bitcoinPrice: BitcoinPrice) => void;
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
   reset: () => void;
 }
 
 const OrderContext = createContext<ContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
+<<<<<<< HEAD
   const [state, setState] = useState<PaymentState>({
     order: null,
     attempts: { onchain: null, lightning: null },
     activeMethod: "onchain",
     bitcoinPrice: null,
   });
+=======
+  const [order, setOrderState] = useState<Order | null>(null);
+  const [invoice, setInvoiceState] = useState<PaymentAttemptResponse | null>(
+    null
+  );
+  const [bitcoinPrice, setBitcoinPriceState] = useState<BitcoinPrice | null>(
+    null
+  );
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
 
   useEffect(() => {
     const savedState = localStorage.getItem("paymentState");
@@ -113,6 +138,10 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     setState((prev) => ({ ...prev, bitcoinPrice: price }));
   };
 
+  const setBitcoinPrice = (price: BitcoinPrice) => {
+    setBitcoinPriceState(price);
+  };
+
   const reset = () => {
     localStorage.removeItem("paymentState");
     setState({
@@ -126,12 +155,22 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   return (
     <OrderContext.Provider
       value={{
+<<<<<<< HEAD
         ...state,
         updatePayment,
         setOrder,
         setActiveMethod,
         setBitcoinPrice,
         reset,
+=======
+        order,
+        invoice,
+        setOrder,
+        setInvoice,
+        reset,
+        bitcoinPrice,
+        setBitcoinPrice,
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
       }}
     >
       {children}
@@ -146,3 +185,33 @@ export const useOrder = () => {
   }
   return context;
 };
+export function getAllCountdownStatuses(duration_default = 3): {
+  key: string;
+  is_active: boolean;
+  remaining: number;
+}[] {
+  const keys: string[] = JSON.parse(
+    localStorage.getItem("countdownKeys") || "[]"
+  );
+  const now = Date.now();
+
+  return keys
+    .map((key) => {
+      const stored = localStorage.getItem(key);
+      if (!stored) return { key, is_active: false, remaining: 0 };
+
+      const start_time = parseInt(stored);
+      const elapsed = Math.floor((now - start_time) / 1000);
+      const remaining = duration_default - elapsed;
+
+      if (remaining <= 0) {
+        localStorage.removeItem(key);
+        const updated = keys.filter((k) => k !== key);
+        localStorage.setItem("countdownKeys", JSON.stringify(updated));
+        return { key, is_active: false, remaining: 0 };
+      }
+
+      return { key, is_active: true, remaining };
+    })
+    .filter(({ is_active }) => is_active);
+}

@@ -10,10 +10,15 @@ export function BitcoinPaymentButton() {
   }, []);
   const [isHovered, setIsHovered] = React.useState(false);
   const navigate = useNavigate();
+<<<<<<< HEAD
   const { setOrder, reset } = useOrder();
   useEffect(() => {
     reset();
   }, []);
+=======
+  const { setInvoice, setOrder } = useOrder();
+
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
   const handler_create_order = async () => {
     const response = await axiosInstance.post("/orders", {
       customer_code: "CUS001",
@@ -21,13 +26,41 @@ export function BitcoinPaymentButton() {
       amount_fiat: 20,
       local_currency_code: "USD",
     });
+<<<<<<< HEAD
 
     setOrder({
       order_code: response.data.created_order.order_code,
       payment_request_code:
         response.data.created_payment_request.payment_request_code,
+=======
+    setOrder(response.data.created_order.order_code);
+    if (response.status === 201) {
+      await handler_create_payment_attempt(
+        response.data.created_order.order_code,
+        response.data.created_payment_request.payment_request_code
+      );
+    }
+  };
+
+  const handler_create_payment_attempt = async (
+    order_code: number,
+    payment_request_code: number
+  ) => {
+    const response = await axiosInstance.post("/payment-attempts", {
+      order_code: order_code,
+      payment_request_code: payment_request_code,
+      payment_method_code: "PM-O",
+      amount_sats: 0.5,
+      network_fee: 2.5,
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
     });
     if (response.status === 201) {
+<<<<<<< HEAD
+=======
+      setInvoice(response.data);
+
+      console.log("should redirect to payment");
+>>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
       navigate("/btc/payment");
     }
   };
