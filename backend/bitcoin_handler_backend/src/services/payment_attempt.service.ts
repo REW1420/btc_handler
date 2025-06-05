@@ -1,8 +1,9 @@
 import prisma from "../prisma/client";
-
+import { get_id_by_code } from "../hook/get_id_by_code";
+import { generate_unique_code } from "../hook/generate_unique_code";
 interface Create_new_payment_attempt_input {
-  payment_method_id?: number;
-  order_id?: number;
+  payment_method_code: string;
+  order_code: string;
   network_fee?: number;
   layer_1_address?: string;
   invoice_address?: string;
@@ -13,16 +14,23 @@ interface Create_new_payment_attempt_input {
 export const create_new_payment_attempt_service = async (
   input: Create_new_payment_attempt_input
 ) => {
-  if (!input.order_id) throw new Error("Missing order_id");
+  if (!input.order_code) throw new Error("Missing order_id");
 
-  const DEFAULT_PAYMENT_STATUS_ID = 1;
-  const EXPIRED_PAYMENT_STATUS_ID = 4;
-  const DEFAULT_PAYMENT_PREFERENCE_ID = 1;
+  if (!input.payment_method_code) throw new Error("Missing method code");
 
   return await prisma.$transaction(async (tx: any) => {
+    //get order_id by order_code
+    const order_id = await get_id_by_code({
+      tx,
+      model: "order",
+      codeField: "order_code",
+      codeValue: input.order_code,
+      idField: "order_id",
+    });
     // Busca el wallet válido
+
     const order = await tx.order.findUnique({
-      where: { order_id: input.order_id },
+      where: { order_id: order_id },
       select: {
         Customer: { select: { customer_wallet_address_id: true } },
       },
@@ -41,33 +49,51 @@ export const create_new_payment_attempt_service = async (
 
     // Obtiene monto y moneda
     const amount_info = await tx.payment_request.findFirst({
-      where: { order_id: input.order_id },
+      where: { order_id: order_id },
       select: {
         amount_fiat: true,
-        Currency: {
-          select: { name: true, code: true, symbol: true, country: true },
+        Currencies: {
+          select: {
+            name: true,
+            currency_code: true,
+            symbol: true,
+            country: true,
+          },
         },
       },
     });
 
-    // Crea el nuevo intento
+    //get payment_method_id by payment_method_code
+    const payment_method_id = await get_id_by_code({
+      tx,
+      model: "payment_method",
+      codeField: "payment_method_code",
+      codeValue: input.payment_method_code,
+      idField: "payment_method_id",
+    });
+    //create the payment_attempt_code
+    const payment_attempt_code = await generate_unique_code({
+      model: "payment_attempt",
+      field: "payment_attempt_code",
+    });
+
+    // Crea el intento
     const paymentAttempt = await tx.payment_attempt.create({
       data: {
-        payment_method_id: input.payment_method_id,
-        order_id: input.order_id,
+        payment_method_id: payment_method_id,
+        order_id: order_id,
         network_fee: input.network_fee,
         layer_1_address: input.layer_1_address,
         invoice_address: input.invoice_address,
         amount_sats: input.amount_sats,
         metadata: input.metadata,
         customer_wallet_address_id: wallet?.customer_wallet_address_id,
-        payment_preference_id: DEFAULT_PAYMENT_PREFERENCE_ID,
-        payment_status_id: DEFAULT_PAYMENT_STATUS_ID,
+        payment_attempt_code: payment_attempt_code,
       },
     });
 
     const paymentPreference = await tx.payment_preference.findUnique({
-      where: { payment_preference_id: DEFAULT_PAYMENT_PREFERENCE_ID },
+      where: { payment_preference_id: 1 },
       select: {
         invoice_life_time: true,
         invoice_max_attempt: true,
@@ -84,45 +110,37 @@ export const create_new_payment_attempt_service = async (
 };
 
 interface Update_payment_attempt_status_input {
-  payment_attempt_id: number;
-  payment_status_id: number;
+  payment_attempt_code: string;
+  payment_status_code: string;
 }
 
 enum Status {
-  Pending = 1,
-  Processing = 2,
-  Completed = 3,
-  Expired = 4,
+  Pending = 1, // Pending
+  Processing = 2, // Processing
+  Completed = 3, // Completed
+  Expired = 4, // Expired
 }
 
 // Transiciones válidas por tipo de método de pago
-const allowedTransitionsByMethod: Record<number, Record<Status, Status[]>> = {
-  1: {
-    [Status.Pending]: [Status.Processing, Status.Expired],
-    [Status.Processing]: [Status.Completed],
-    [Status.Completed]: [],
-    [Status.Expired]: [],
-  },
+const allowedTransitions: Record<Status, Status[]> = {
+  [Status.Pending]: [Status.Processing, Status.Expired],
+  [Status.Processing]: [Status.Completed],
+  [Status.Completed]: [],
+  [Status.Expired]: [],
 };
 
-function isValidTransitionByMethod(
-  currentStatus: Status,
-  nextStatus: Status,
-  paymentMethodId: number
-): boolean {
-  const methodRules = allowedTransitionsByMethod[paymentMethodId];
-  if (!methodRules) return false; // Método no reconocido
-  return methodRules[currentStatus]?.includes(nextStatus);
+function isValidTransition(currentStatus: Status, nextStatus: Status): boolean {
+  return allowedTransitions[currentStatus]?.includes(nextStatus) ?? false;
 }
 
 export const update_payment_attempt_status = async (
   input: Update_payment_attempt_status_input
 ) => {
-  const { payment_attempt_id, payment_status_id } = input;
+  const { payment_attempt_code, payment_status_code } = input;
 
   return await prisma.$transaction(async (tx) => {
     const currentPaymentAttempt = await tx.payment_attempt.findUnique({
-      where: { payment_attempt_id },
+      where: { payment_attempt_code },
       select: {
         payment_status_id: true,
         payment_method_id: true,
@@ -134,30 +152,42 @@ export const update_payment_attempt_status = async (
       throw new Error("Payment attempt not found");
     }
 
-    const isValid = isValidTransitionByMethod(
-      currentPaymentAttempt.payment_status_id!!,
-      payment_status_id,
-      currentPaymentAttempt.payment_method_id!!
+    //get payment_status_id by payment_status_code
+    const payment_status_id = await get_id_by_code({
+      tx,
+      model: "payment_status",
+      codeField: "payment_status_code",
+      codeValue: payment_status_code,
+      idField: "payment_status_id",
+    });
+
+    const isValid = isValidTransition(
+      currentPaymentAttempt.payment_status_id as Status,
+      payment_status_id as Status
     );
 
     if (!isValid) {
+      console.log(
+        currentPaymentAttempt.payment_status_id as Status,
+        payment_status_id as Status
+      );
       throw new Error(
-        `Invalid status transition from ${currentPaymentAttempt.payment_status_id} to ${payment_status_id}`
+        `Invalid status transition from ${payment_status_id} to ${payment_status_code}`
       );
     }
 
     await tx.payment_attempt.update({
-      where: { payment_attempt_id },
+      where: { payment_attempt_code },
       data: { payment_status_id, updated_at: new Date() },
     });
 
     await tx.order.update({
-      where: { order_id: currentPaymentAttempt.order_id!! },
+      where: { order_id: currentPaymentAttempt.order_id! },
       data: { updated_at: new Date() },
     });
 
     const paymentRequest = await tx.payment_request.findFirst({
-      where: { order_id: currentPaymentAttempt.order_id!! },
+      where: { order_id: currentPaymentAttempt.order_id! },
       select: { payment_request_id: true },
     });
 
@@ -173,21 +203,30 @@ export const update_payment_attempt_status = async (
 };
 
 interface Get_payment_attempt_by_id_input {
-  payment_attempt_id: number;
+  payment_attempt_code: string;
 }
 
 export const get_payment_attempt_by_id = async (
   input: Get_payment_attempt_by_id_input
 ) => {
-  const { payment_attempt_id } = input;
+  const { payment_attempt_code } = input;
 
   return await prisma.$transaction(async (tx) => {
+    //get payment_attempt_id by payment_attempt_code
+    const payment_attempt_id = await get_id_by_code({
+      tx,
+      model: "payment_attempt",
+      codeField: "payment_attempt_code",
+      codeValue: payment_attempt_code,
+      idField: "payment_attempt_id",
+    });
+
     const paymentAttempt = await tx.payment_attempt.findUnique({
       where: { payment_attempt_id },
       select: {
         payment_attempt_id: true,
         payment_status_id: true,
-        payment_method_id: true,
+        payment_method_code: true,
         order_id: true,
         network_fee: true,
         layer_1_address: true,
@@ -206,7 +245,9 @@ export const get_payment_attempt_by_id = async (
     if (!paymentAttempt) return null;
 
     const paymentPreference = await tx.payment_preference.findUnique({
-      where: { payment_preference_id: paymentAttempt.payment_preference_id! },
+      where: {
+        payment_preference_id: paymentAttempt.payment_preference_id!,
+      },
       select: {
         invoice_life_time: true,
         invoice_max_attempt: true,
@@ -225,10 +266,10 @@ export const get_payment_attempt_by_id = async (
       where: { order_id: paymentAttempt.order_id! },
       select: {
         amount_fiat: true,
-        Currency: {
+        Currencies: {
           select: {
             name: true,
-            code: true,
+            currency_code: true,
             symbol: true,
             country: true,
           },

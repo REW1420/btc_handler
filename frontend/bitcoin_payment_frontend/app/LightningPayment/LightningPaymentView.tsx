@@ -1,44 +1,134 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "../components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "../components/ui/alert-dialog";
-import { Link, redirect } from "react-router";
+
 import CopyButton from "~/components/buttons/CopyButton";
 import BitcoinSummary from "~/BitcoinSummaryCard/BitcoinSummary";
 import TimeoutDialog from "~/TimeoutDialog/TimeoutDialog";
 import { useCountdown } from "src/hook/useCountdown";
+import { useOrder } from "src/context/InvoiceContext";
+import axiosInstance from "src/api/axios";
+
+interface LightningInvoiceData {
+  network: string;
+  usd: string;
+  btc: string;
+  fee: string;
+  total: string;
+  note: string;
+  sats: string;
+  address: string;
+}
+
 export function LightningPaymentView() {
   const [open, setOpen] = useState(false);
-  const { remaining, reset } = useCountdown({
-    key: "btc-timer",
-    duration: 300,
-    onExpire: () => setOpen(true),
-  });
-  // Simulate a countdown timer
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { order, attempts, setActiveMethod, activeMethod, updatePayment } =
+    useOrder();
+  //set the active method
+  useEffect(() => {
+    setActiveMethod("lightning");
+  }, []);
 
-  const lightning = {
+  const invoice = attempts.lightning;
+
+  const lightningTimer = useCountdown({
+    duration: 5,
+
+    onExpire: () => {
+      lightningTimer.reset();
+      lightningTimer.start();
+    },
+  });
+
+  useEffect(() => {
+    lightningTimer.start();
+  }, []);
+
+  const isCreatingRef = useRef(false);
+
+  const createLightningInvoice = useCallback(async () => {
+    if (isCreatingRef.current) return;
+    isCreatingRef.current = true;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const existingLightning = attempts.lightning;
+
+      // Expira intento anterior
+      if (existingLightning?.paymentAttempt.payment_attempt_code) {
+        try {
+          await axiosInstance.put("/payment-attempts", {
+            payment_attempt_code:
+              existingLightning.paymentAttempt.payment_attempt_code,
+            payment_status_code: "PS-E",
+          });
+        } catch (error) {
+          console.warn(
+            "No se pudo expirar el intento anterior de Lightning:",
+            error
+          );
+        }
+      }
+
+      // Crea nuevo intento
+      const response = await axiosInstance.post("/payment-attempts", {
+        order_code: order?.order_code,
+        payment_request_code:
+          existingLightning?.paymentAttempt.payment_attempt_code,
+        payment_method_code: "PM-L",
+        local_currency_code: "USD",
+        amount_sats: existingLightning?.paymentAttempt.amount_sats ?? 1000,
+        network_fee: existingLightning?.paymentAttempt.network_fee ?? 0,
+      });
+
+      if (response.status === 201) {
+        updatePayment(response.data, "lightning");
+      } else {
+        throw new Error(`Unexpected status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Error al crear el invoice Lightning:", error);
+      setError("No se pudo generar el invoice de Lightning");
+    } finally {
+      setIsLoading(false);
+      isCreatingRef.current = false;
+    }
+  }, [attempts, order, updatePayment]);
+
+  // Initialize invoice on mount
+  useEffect(() => {
+    createLightningInvoice();
+  }, []);
+
+  // Format remaining time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Lightning invoice data
+  const lightningData: LightningInvoiceData = {
     network: "Bitcoin Lightning",
-    usd: "$29.99",
-    btc: "0.00032 BTC",
-    fee: "Sin tarifa",
-    total: "0.00034 BTC",
-    note: "Expira en " + remaining,
-    sats: "0.0000031 Sats",
-    address:
-      "Lnbc2m1pnrjd6epp5xg37tadmcc479dt8c3rqk9mu4p08y8a5uvdd4repy4r8zzs40y4qdqqcqzzsxqrrs0fppqhsrcf2xszcp9nu4xgxzjwx6m3qnvlvrtsp5nft6epu8wxaxytyadq95ygyqvewuhuqh4zw6wevwvufxjr0zc0qq9qyyssqtafnv4cz4uuccg8xfw0ec2lgmr9u23rg85ac86zdnkn4mkq93krn283prlthqky5ujpv8x4cecs4634uu4gcw4f57l3haur8vg6myggp7z6erh",
+    usd: `$2`,
+    btc: `${invoice?.paymentAttempt.amount_sats || 0} BTC`,
+    fee: invoice?.paymentAttempt.network_fee
+      ? `${invoice.paymentAttempt.network_fee} BTC`
+      : "Sin tarifa",
+    total: `${
+      (invoice?.paymentAttempt.amount_sats || 0) +
+      (invoice?.paymentAttempt.network_fee || 0)
+    } BTC`,
+    note: `Expira en ${formatTime(lightningTimer.remaining)}`,
+    sats: `${invoice?.paymentAttempt.amount_sats || 0} Sats`,
+    address: invoice?.wallet_address || "Lnbc2m1pnrjd6e...",
   };
 
   return (
-    <div>
+    <div className="container mx-auto p-4">
       <div className="bg-gray-100 rounded-xl p-6">
         <div className="flex flex-col md:flex-row gap-6">
           {/* Transaction details */}
@@ -46,30 +136,15 @@ export function LightningPaymentView() {
             <h3 className="text-center font-medium mb-2">
               Detalles de la transacción
             </h3>
-            <div className="flex justify-between">
-              <span>Red</span>
-              <span>{lightning.network}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total en USD</span>
-              <span>{lightning.usd}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total en Bitcoin</span>
-              <span>{lightning.btc}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-xs">Total en Sats</span>
-              <span className="text-xs">{lightning.sats}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Tarifa de red</span>
-              <span>{lightning.fee}</span>
-            </div>
-            <div className="flex justify-between font-semibold pt-2">
-              <span>Total</span>
-              <span>{lightning.total}</span>
-            </div>
+            {Object.entries(lightningData).map(([key, value]) => (
+              <div key={key} className="flex justify-between">
+                <span>
+                  {key.charAt(0).toUpperCase() +
+                    key.slice(1).replace(/_/g, " ")}
+                </span>
+                <span>{value}</span>
+              </div>
+            ))}
             <hr className="my-4 border-t border-gray-900" />
             <BitcoinSummary />
           </div>
@@ -81,39 +156,59 @@ export function LightningPaymentView() {
             </h3>
 
             <img
-              src="https://pngimg.com/uploads/qr_code/qr_code_PNG10.png"
-              alt="QR"
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${lightningData.address}`}
+              alt="QR Code"
               className="w-60 h-60 mx-auto my-2"
             />
-            <div className="mb-4 ">
-              <p className="text-center text-sm text-gray-900 mt-2 whitespace-pre-line">
-                {lightning.note}
+
+            <div className="mb-4">
+              <p className="text-center text-sm text-gray-900 mt-2">
+                {lightningData.note}
               </p>
             </div>
+
             <div className="flex items-center gap-2">
               <input
                 readOnly
-                title={lightning.address}
-                value={lightning.address}
-                className="w-full max-w-xs px-2 py-1 border border-gray-300 rounded-md text-sm"
+                title={lightningData.address}
+                value={lightningData.address}
+                className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
               />
-              <CopyButton textToCopy={lightning.address} />
+              <CopyButton textToCopy={lightningData.address} />
             </div>
           </div>
         </div>
+
+        <div className="mt-6 flex justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => createLightningInvoice()}
+            disabled={isLoading}
+          >
+            {isLoading ? "Generando..." : "Generar nueva factura"}
+          </Button>
+        </div>
+
         <TimeoutDialog
+          title="Tiempo de espera agotado!"
+          description="Puedes generar un nuevo código QR o dirección de pago."
+          cancelText="Cancelar transacción"
+          retryText="Generar nueva invoice"
           open={open}
-          onCancel={() => setOpen(false)}
+          onCancel={() => {
+            setOpen(false);
+          }}
           onRetry={() => {
             setOpen(false);
-            reset();
+            createLightningInvoice();
           }}
-        />
-        <Link to="/btc/succeed_payment">
-          <Button variant="outline" size="sm" color="green" className="mt-4">
-            Procesar pago
-          </Button>
-        </Link>
+        >
+          <span className="text-red-500 font-semibold">
+            Recuerda que el tiempo de espera es de{" "}
+            {invoice?.paymentPreference.invoice_life_time} segundos.
+          </span>
+        </TimeoutDialog>
       </div>
     </div>
   );

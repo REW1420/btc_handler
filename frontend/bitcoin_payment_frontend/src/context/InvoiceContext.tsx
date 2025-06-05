@@ -8,10 +8,10 @@ import React, {
 
 interface PaymentAttemptResponse {
   paymentAttempt: {
-    payment_attempt_id: number;
-    payment_status_id: number;
-    payment_method_id: number;
-    order_id: number;
+    payment_attempt_code: string;
+    payment_status_code: string;
+    payment_method_code: string;
+    order_code: string;
     network_fee: number;
     layer_1_address: string | null;
     invoice_address: string | null;
@@ -31,9 +31,9 @@ interface PaymentAttemptResponse {
   wallet_address: string;
   amount_info: {
     amount_fiat: string;
-    Currency: {
+    Currencies: {
       name: string;
-      code: string;
+      currency_code: string;
       symbol: string;
       country: string;
     };
@@ -41,55 +41,98 @@ interface PaymentAttemptResponse {
 }
 
 interface Order {
-  order_id: number;
+  order_code: string;
+  payment_request_code: string;
 }
 
-interface OrderContextType {
+interface BitcoinPrice {
+  price_usd: string;
+}
+
+type PaymentMethod = "onchain" | "lightning";
+
+interface PaymentState {
   order: Order | null;
-  invoice: PaymentAttemptResponse | null;
+  attempts: Record<PaymentMethod, PaymentAttemptResponse | null>;
+  activeMethod: PaymentMethod;
+  bitcoinPrice: BitcoinPrice | null;
+}
+
+interface ContextType extends PaymentState {
+  updatePayment: (
+    attempt: PaymentAttemptResponse,
+    method: PaymentMethod
+  ) => void;
   setOrder: (order: Order) => void;
-  setInvoice: (invoice: PaymentAttemptResponse) => void;
+  setActiveMethod: (method: PaymentMethod) => void;
+  setBitcoinPrice: (price: BitcoinPrice) => void;
   reset: () => void;
 }
 
-const OrderContext = createContext<OrderContextType | undefined>(undefined);
+const OrderContext = createContext<ContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
-  const [order, setOrderState] = useState<Order | null>(null);
-  const [invoice, setInvoiceState] = useState<PaymentAttemptResponse | null>(
-    null
-  );
+  const [state, setState] = useState<PaymentState>({
+    order: null,
+    attempts: { onchain: null, lightning: null },
+    activeMethod: "onchain",
+    bitcoinPrice: null,
+  });
 
-  // Al montar, recupera desde localStorage
   useEffect(() => {
-    const storedOrder = localStorage.getItem("order");
-    const storedInvoice = localStorage.getItem("invoice");
-
-    if (storedOrder) setOrderState(JSON.parse(storedOrder));
-    if (storedInvoice) setInvoiceState(JSON.parse(storedInvoice));
+    const savedState = localStorage.getItem("paymentState");
+    if (savedState) {
+      setState(JSON.parse(savedState));
+    }
   }, []);
 
-  // Guarda en localStorage cada vez que se actualiza
-  const setOrder = (order: Order) => {
-    localStorage.setItem("order", JSON.stringify(order));
-    setOrderState(order);
+  useEffect(() => {
+    localStorage.setItem("paymentState", JSON.stringify(state));
+  }, [state]);
+
+  const updatePayment = (
+    attempt: PaymentAttemptResponse,
+    method: PaymentMethod
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      attempts: { ...prev.attempts, [method]: attempt },
+      activeMethod: method,
+    }));
   };
 
-  const setInvoice = (invoice: PaymentAttemptResponse) => {
-    localStorage.setItem("invoice", JSON.stringify(invoice));
-    setInvoiceState(invoice);
+  const setOrder = (order: Order) => {
+    setState((prev) => ({ ...prev, order }));
+  };
+
+  const setActiveMethod = (method: PaymentMethod) => {
+    setState((prev) => ({ ...prev, activeMethod: method }));
+  };
+
+  const setBitcoinPrice = (price: BitcoinPrice) => {
+    setState((prev) => ({ ...prev, bitcoinPrice: price }));
   };
 
   const reset = () => {
-    localStorage.removeItem("order");
-    localStorage.removeItem("invoice");
-    setOrderState(null);
-    setInvoiceState(null);
+    localStorage.removeItem("paymentState");
+    setState({
+      order: null,
+      attempts: { onchain: null, lightning: null },
+      activeMethod: "onchain",
+      bitcoinPrice: null,
+    });
   };
 
   return (
     <OrderContext.Provider
-      value={{ order, invoice, setOrder, setInvoice, reset }}
+      value={{
+        ...state,
+        updatePayment,
+        setOrder,
+        setActiveMethod,
+        setBitcoinPrice,
+        reset,
+      }}
     >
       {children}
     </OrderContext.Provider>

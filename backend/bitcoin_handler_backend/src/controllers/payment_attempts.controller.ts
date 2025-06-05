@@ -40,10 +40,8 @@ export const get_payment_attempt_by_id_controller = async (
   res: Response
 ) => {
   try {
-    const payment_attempt_id = Number(req.params.id);
-
     const payment_attempt = await get_payment_attempt_by_id({
-      payment_attempt_id,
+      payment_attempt_code: req.params.payment_attempt_code,
     });
 
     res.status(200).json(payment_attempt);

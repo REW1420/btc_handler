@@ -10,40 +10,58 @@ import {
   AlertDialogAction,
 } from "../components/ui/alert-dialog";
 import { Link } from "react-router";
-
+import { useOrder } from "src/context/InvoiceContext";
+import axiosInstance from "src/api/axios";
 interface TimeoutDialogProps {
   open: boolean;
   onCancel: () => void;
   onRetry: () => void;
+  title: string;
+  description?: string;
+  cancelText?: string;
+  retryText?: string;
+  children?: React.ReactNode;
 }
 
 export default function TimeoutDialog({
   open,
   onCancel,
   onRetry,
+  title = "Tiempo de espera agotado!",
+  description = "Puedes generar un nuevo código QR o dirección de pago.",
+  cancelText = "Cancelar transacción",
+  retryText = "Generar nueva invoice",
+  children,
 }: TimeoutDialogProps) {
+  const { order } = useOrder();
   return (
     <AlertDialog open={open}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Tiempo de espera agotado!</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            Puedes generar un nuevo código QR o dirección de pago.
+            {description}
             <br />
-            <span className="text-red-500 font-semibold">
-              Recuerda que el tiempo de espera es de 300 segundos.
-            </span>
+            {children}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <Link to="/">
-            <AlertDialogCancel onClick={onCancel}>
-              Cancelar transacción
-            </AlertDialogCancel>
-          </Link>
-          <AlertDialogAction onClick={onRetry}>
-            Generar nueva invoice
-          </AlertDialogAction>
+          <AlertDialogCancel
+            onClick={async () => {
+              await axiosInstance
+                .patch("/orders", {
+                  order_code: order?.order_code,
+                })
+                .then((response) => {
+                  if (response.status === 200) {
+                    onCancel();
+                  }
+                });
+            }}
+          >
+            {cancelText}
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={onRetry}>{retryText}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
