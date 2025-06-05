@@ -20,14 +20,9 @@ const BitcoinSummary: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-<<<<<<< HEAD
   const { setBitcoinPrice, attempts, activeMethod } = useOrder();
 
   const invoice = attempts.onchain;
-=======
-  const { setBitcoinPrice, invoice } = useOrder();
-
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
   const duration = invoice?.paymentPreference.invoice_life_time || 300; // Valor por defecto de 5 minutos
 
   // Memoizar la función de fetch para evitar recreaciones innecesarias

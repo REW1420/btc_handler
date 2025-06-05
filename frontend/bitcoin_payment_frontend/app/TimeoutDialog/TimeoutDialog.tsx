@@ -50,11 +50,7 @@ export default function TimeoutDialog({
             onClick={async () => {
               await axiosInstance
                 .patch("/orders", {
-<<<<<<< HEAD
                   order_code: order?.order_code,
-=======
-                  order_code: order,
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
                 })
                 .then((response) => {
                   if (response.status === 200) {

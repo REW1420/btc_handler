@@ -11,7 +11,6 @@ export default function PaymentViewSwitcher() {
   const [paymentView, setPaymentView] = useState<"onchain" | "lightning">(
     "onchain"
   );
-  const { invoice } = useOrder();
 
   return (
     <div className="bg-gray-900 rounded-xl pt-6">

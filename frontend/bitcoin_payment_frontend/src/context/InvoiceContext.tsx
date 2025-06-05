@@ -42,7 +42,6 @@ interface PaymentAttemptResponse {
 
 interface Order {
   order_code: string;
-<<<<<<< HEAD
   payment_request_code: string;
 }
 
@@ -67,42 +66,18 @@ interface ContextType extends PaymentState {
   setOrder: (order: Order) => void;
   setActiveMethod: (method: PaymentMethod) => void;
   setBitcoinPrice: (price: BitcoinPrice) => void;
-=======
-}
-interface BitcoinPrice {
-  price_usd: string;
-}
-
-interface ContextType {
-  order: Order | null;
-  invoice: PaymentAttemptResponse | null;
-  bitcoinPrice: BitcoinPrice | null;
-  setOrder: (order: Order) => void;
-  setInvoice: (invoice: PaymentAttemptResponse) => void;
-  setBitcoinPrice?: (bitcoinPrice: BitcoinPrice) => void;
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
   reset: () => void;
 }
 
 const OrderContext = createContext<ContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
-<<<<<<< HEAD
   const [state, setState] = useState<PaymentState>({
     order: null,
     attempts: { onchain: null, lightning: null },
     activeMethod: "onchain",
     bitcoinPrice: null,
   });
-=======
-  const [order, setOrderState] = useState<Order | null>(null);
-  const [invoice, setInvoiceState] = useState<PaymentAttemptResponse | null>(
-    null
-  );
-  const [bitcoinPrice, setBitcoinPriceState] = useState<BitcoinPrice | null>(
-    null
-  );
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
 
   useEffect(() => {
     const savedState = localStorage.getItem("paymentState");
@@ -138,10 +113,6 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     setState((prev) => ({ ...prev, bitcoinPrice: price }));
   };
 
-  const setBitcoinPrice = (price: BitcoinPrice) => {
-    setBitcoinPriceState(price);
-  };
-
   const reset = () => {
     localStorage.removeItem("paymentState");
     setState({
@@ -155,22 +126,12 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   return (
     <OrderContext.Provider
       value={{
-<<<<<<< HEAD
         ...state,
         updatePayment,
         setOrder,
         setActiveMethod,
         setBitcoinPrice,
         reset,
-=======
-        order,
-        invoice,
-        setOrder,
-        setInvoice,
-        reset,
-        bitcoinPrice,
-        setBitcoinPrice,
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
       }}
     >
       {children}

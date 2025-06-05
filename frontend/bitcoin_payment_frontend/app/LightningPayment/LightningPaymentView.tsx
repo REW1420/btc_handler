@@ -23,7 +23,6 @@ export function LightningPaymentView() {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
   const { order, attempts, setActiveMethod, activeMethod, updatePayment } =
     useOrder();
   //set the active method
@@ -33,10 +32,6 @@ export function LightningPaymentView() {
 
   const invoice = attempts.lightning;
 
-=======
-  const { invoice, order, setInvoice } = useOrder();
-
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
   const lightningTimer = useCountdown({
     duration: 5,
 
@@ -50,22 +45,16 @@ export function LightningPaymentView() {
     lightningTimer.start();
   }, []);
 
-<<<<<<< HEAD
   const isCreatingRef = useRef(false);
 
   const createLightningInvoice = useCallback(async () => {
     if (isCreatingRef.current) return;
     isCreatingRef.current = true;
 
-=======
-  // Memoized function to create invoice
-  const createLightningInvoice = useCallback(async () => {
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
     setIsLoading(true);
     setError(null);
 
     try {
-<<<<<<< HEAD
       const existingLightning = attempts.lightning;
 
       // Expira intento anterior
@@ -97,35 +86,10 @@ export function LightningPaymentView() {
 
       if (response.status === 201) {
         updatePayment(response.data, "lightning");
-=======
-      // 1. Try to expire previous invoice (optional)
-      try {
-        await axiosInstance.put("/payment-attempts", {
-          payment_attempt_code: invoice?.paymentAttempt.payment_attempt_code,
-          payment_status_code: "PS-E",
-        });
-      } catch (error) {
-        console.warn("Could not expire previous invoice", error);
-      }
-
-      // 2. Create new invoice
-      const response = await axiosInstance.post("/payment-attempts", {
-        order_code: order,
-        payment_request_code: invoice?.paymentAttempt.payment_attempt_code,
-        payment_method_code: "PM-L",
-        local_currency_code: "USD",
-        amount_sats: invoice?.paymentAttempt.amount_sats,
-        network_fee: invoice?.paymentAttempt.network_fee,
-      });
-
-      if (response.status === 201) {
-        setInvoice(response.data);
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
       } else {
         throw new Error(`Unexpected status: ${response.status}`);
       }
     } catch (error) {
-<<<<<<< HEAD
       console.error("Error al crear el invoice Lightning:", error);
       setError("No se pudo generar el invoice de Lightning");
     } finally {
@@ -133,14 +97,6 @@ export function LightningPaymentView() {
       isCreatingRef.current = false;
     }
   }, [attempts, order, updatePayment]);
-=======
-      console.error("Error creating lightning invoice:", error);
-      setError("Failed to create payment invoice");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [invoice, order, open, , setInvoice]);
->>>>>>> 4de490fc5018832686a17ae26324dfe861e558dd
 
   // Initialize invoice on mount
   useEffect(() => {
