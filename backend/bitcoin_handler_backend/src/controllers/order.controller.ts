@@ -10,7 +10,7 @@ export const create_order = async (req: Request, res: Response) => {
     const new_order = await create_order_with_payment_request(req.body);
     res.status(201).json(new_order);
   } catch (error) {
-    console.error("Error al crear orden:", error);
+    console.error("Error al crear orden:");
     res
       .status(500)
       .json({ message: "Error al crear la orden con su Payment_request" });

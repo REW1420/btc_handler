@@ -3,14 +3,15 @@ import express from "express";
 import orderRoutes from "./routes/order.routes";
 import paymentAttemptRoutes from "./routes/payment_attempts.routes";
 import cors from "cors";
+import { error_handler } from "./middleware/error_handler";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(cors());
+app.use(error_handler);
 
 app.use("/api/orders", orderRoutes);
-
 app.use("/api/payment-attempts", paymentAttemptRoutes);
 
 //helloworld
