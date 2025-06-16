@@ -6,6 +6,13 @@ import React, {
   type ReactNode,
 } from "react";
 
+import {
+  decryptClient,
+  decryptData,
+  encryptClient,
+  encryptData,
+} from "../hook/useEncryption";
+
 interface PaymentAttemptResponse {
   paymentAttempt: {
     payment_attempt_code: string;
@@ -66,6 +73,7 @@ interface ContextType extends PaymentState {
   setOrder: (order: Order) => void;
   setActiveMethod: (method: PaymentMethod) => void;
   setBitcoinPrice: (price: BitcoinPrice) => void;
+
   reset: () => void;
 }
 
@@ -82,12 +90,24 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const savedState = localStorage.getItem("paymentState");
     if (savedState) {
-      setState(JSON.parse(savedState));
+      try {
+        const decrypted = decryptClient(savedState);
+        console.log(decrypted);
+        setState(decrypted);
+      } catch (error) {
+        console.warn("Error al desencriptar paymentState:", error);
+        localStorage.removeItem("paymentState");
+      }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("paymentState", JSON.stringify(state));
+    try {
+      const encrypted = encryptClient(state);
+      localStorage.setItem("paymentState", encrypted);
+    } catch (error) {
+      console.error("Error al encriptar paymentState:", error);
+    }
   }, [state]);
 
   const updatePayment = (
@@ -115,12 +135,6 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
 
   const reset = () => {
     localStorage.removeItem("paymentState");
-    setState({
-      order: null,
-      attempts: { onchain: null, lightning: null },
-      activeMethod: "onchain",
-      bitcoinPrice: null,
-    });
   };
 
   return (
@@ -146,33 +160,3 @@ export const useOrder = () => {
   }
   return context;
 };
-export function getAllCountdownStatuses(duration_default = 3): {
-  key: string;
-  is_active: boolean;
-  remaining: number;
-}[] {
-  const keys: string[] = JSON.parse(
-    localStorage.getItem("countdownKeys") || "[]"
-  );
-  const now = Date.now();
-
-  return keys
-    .map((key) => {
-      const stored = localStorage.getItem(key);
-      if (!stored) return { key, is_active: false, remaining: 0 };
-
-      const start_time = parseInt(stored);
-      const elapsed = Math.floor((now - start_time) / 1000);
-      const remaining = duration_default - elapsed;
-
-      if (remaining <= 0) {
-        localStorage.removeItem(key);
-        const updated = keys.filter((k) => k !== key);
-        localStorage.setItem("countdownKeys", JSON.stringify(updated));
-        return { key, is_active: false, remaining: 0 };
-      }
-
-      return { key, is_active: true, remaining };
-    })
-    .filter(({ is_active }) => is_active);
-}

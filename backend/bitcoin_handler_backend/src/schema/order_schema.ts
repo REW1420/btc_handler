@@ -33,3 +33,31 @@ export const build_order_schema = (tx: TxClient) =>
     amount_fiat: z.number().positive("El valor es inválido"),
     local_currency_code: z.string().min(1, "Código de divisa inválido"),
   });
+
+
+export const build_expired_order_schema = (tx: TxClient) =>
+  z.object({
+    order_code: z
+      .string()
+      .min(1, "Código del pedido es obligatorio")
+      .refine(
+        async (code) => {
+          try {
+            await get_id_by_code({
+              tx,
+              model: "order",
+              codeField: "order_code",
+              codeValue: code,
+              idField: "order_id",
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        {
+          message: "El pedido con ese código no existe",
+        }
+      ),
+
+  });
